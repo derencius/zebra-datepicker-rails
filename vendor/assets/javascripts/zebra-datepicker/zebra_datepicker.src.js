@@ -8,12 +8,14 @@
  *  For more resources visit {@link http://stefangabos.ro/}
  *
  *  @author     Stefan Gabos <contact@stefangabos.ro>
- *  @version    1.8.7 (last revision: November 28, 2013)
- *  @copyright  (c) 2011 - 2013 Stefan Gabos
+ *  @version    1.8.9 (last revision: August 16, 2014)
+ *  @copyright  (c) 2011 - 2014 Stefan Gabos
  *  @license    http://www.gnu.org/licenses/lgpl-3.0.txt GNU LESSER GENERAL PUBLIC LICENSE
  *  @package    Zebra_DatePicker
  */
 ;(function($) {
+
+    'use strict';
 
     $.Zebra_DatePicker = function(element, options) {
 
@@ -33,6 +35,14 @@
             //
             //  default is FALSE
             days_abbr: false,
+
+            //  the position of the date picker relative to the element it is attached to. note that, regardless of this
+            //  setting, the date picker's position will be automatically adjusted to fit in the viewport, if needed.
+            //
+            //  possible values are "above" and "below"
+            //
+            //  default is "above"
+            default_position: 'above',
 
             //  direction of the calendar
             //
@@ -97,7 +107,7 @@
             //  format of the returned date
             //
             //  accepts the following characters for date formatting: d, D, j, l, N, w, S, F, m, M, n, Y, y borrowing
-            //  syntax from (PHP's date function)
+            //  syntax from PHP's "date" function.
             //
             //  note that when setting a date format without days ('d', 'j'), the users will be able to select only years
             //  and months, and when setting a format without months and days ('F', 'm', 'M', 'n', 'd', 'j'), the
@@ -109,6 +119,41 @@
             //
             //  default is Y-m-d
             format: 'Y-m-d',
+
+            //  captions in the datepicker's header, for the 3 possible views: days, months, years
+            //
+            //  for each of the 3 views the following special characters may be used borrowing from PHP's "date" function's
+            //  syntax: m, n, F, M, y and Y; any of these will be replaced at runtime with the appropriate date fragment,
+            //  depending on the currently viewed date. two more special characters are also available Y1 and Y2 (upper
+            //  case representing years with 4 digits, lowercase representing years with 2 digits) which represent
+            //  "currently selected year - 7" and "currently selected year + 4" and which only make sense used in the
+            //  "years" view.
+            //
+            //  even though any of these special characters may be used in any of the 3 views, you should use m, n, F, M
+            //  for the "days" view and y, Y, Y1, Y2, y1, y2 for the "months" and "years" view or you may get unexpected
+            //  results!
+            //
+            //  Text and HTML can also be used, and will be rendered as it is, as in the example below (the library is
+            //  smart enough to not replace special characters when used in words or HTML tags):
+            //
+            //  header_captions: {
+            //      'days':     'Departure:<br>F, Y',
+            //      'months':   'Departure:<br>Y',
+            //      'years':    'Departure:<br>Y1 - Y2'
+            //  }
+            //
+            //  Default is
+            //
+            //  header_captions: {
+            //      'days':     'F, Y',
+            //      'months':   'Y',
+            //      'years':    'Y1 - Y2'
+            //  }
+            header_captions: {
+                'days':     'F, Y',
+                'months':   'Y',
+                'years':    'Y1 - Y2'
+            },
 
             //  HTML to be used for the previous month/next month buttons
             //
@@ -246,26 +291,44 @@
             //  view (can be "days", "months" or "years"), the second argument represents an array containing the "active"
             //  elements (not disabled) from the view, as jQuery elements, allowing for easy customization and interaction
             //  with particular cells in the date picker's view, while the third argument is a reference to the element
-            //  the date picker is attached to, as a jQuery object
+            //  the date picker is attached to, as a jQuery object (deprecated - use the "this" keyword inside the callback
+            //  function to refer to the element the date picker is attached to)
             //
             //  for simplifying searching for particular dates, each element in the second argument will also have a
             //  "date" data attribute whose format depends on the value of the "view" argument:
             //  - YYYY-MM-DD for elements in the "days" view
             //  - YYYY-MM for elements in the "months" view
             //  - YYYY for elements in the "years" view
+            //
+            //  the "this" keyword inside the callback function refers to the element the date picker is attached to!
             onChange: null,
 
             //  callback function to be executed when the user clicks the "Clear" button
             //  the callback function takes a single argument:
-            //  -   a reference to the element the date picker is attached to, as a jQuery object
+            //  -   a reference to the element the date picker is attached to, as a jQuery object (deprecated - use the
+            //      "this" keyword inside the callback function to refer to the element the date picker is attached to)
+            //
+            //  the "this" keyword inside the callback function refers to the element the date picker is attached to!
             onClear: null,
 
+            //  callback function to be executed when the date picker is shown
+            //  the callback function takes a single argument:
+            //  -   a reference to the element the date picker is attached to, as a jQuery object (deprecated - use the
+            //      "this" keyword inside the callback function to refer to the element the date picker is attached to)
+            //
+            //  the "this" keyword inside the callback function refers to the element the date picker is attached to!
+            onOpen: null,
+
             //  callback function to be executed when a date is selected
-            //  the callback function takes 4 arguments:
+            //  the callback function takes 5 arguments:
             //  -   the date in the format specified by the "format" attribute;
             //  -   the date in YYYY-MM-DD format
             //  -   the date as a JavaScript Date object
-            //  -   a reference to the element the date picker is attached to, as a jQuery object
+            //  -   a reference to the element the date picker is attached to, as a jQuery object (deprecated - use the
+            //      "this" keyword inside the callback function to refer to the element the date picker is attached to)
+            //  -   the ISO 8601 week number of the selected date
+            //
+            //  the "this" keyword inside the callback function refers to the element the date picker is attached to!
             onSelect: null
 
         };
@@ -311,7 +374,8 @@
                         if (undefined !== defaults[data])
 
                             // update the property's value
-                            plugin.settings[data] = $element.data('zdp_' + data);
+                            // (note that for the "pair" property we need to convert the property to an element)
+                            plugin.settings[data] = (data == 'pair' ? $($element.data('zdp_' + data)) : $element.data('zdp_' + data));
 
                     }
 
@@ -360,6 +424,9 @@
 
             // if user can cycle only through year and months, set the flag accordingly
             else if (!has_days && has_months && has_years) views = ['years', 'months'];
+
+            // if user can cycle only through months and days, set the flag accordingly
+            else if (has_days && has_months && !has_years) views = ['months', 'days'];
 
             // if user can only see the year picker, set the flag accordingly
             else if (!has_days && !has_months && has_years) views = ['years'];
@@ -803,7 +870,8 @@
                 $element.val('');
 
             // updates value for the date picker whose starting date depends on the selected date (if any)
-            if (!update) update_dependent(start_date);
+            if (!update && (undefined !== start_date || undefined !== default_date))
+                update_dependent(undefined !== start_date ? start_date : default_date);
 
             // if date picker is not always visible
             if (!plugin.settings.always_visible) {
@@ -822,7 +890,7 @@
 
                         // we create a wrapper for the parent element so that we can later position the icon
                         // also, make sure the wrapper inherits some important css properties of the parent element
-                        var icon_wrapper = jQuery('<span class="Zebra_DatePicker_Icon_Wrapper"></span>').css({
+                        var icon_wrapper = $('<span class="Zebra_DatePicker_Icon_Wrapper"></span>').css({
                             'display':  $element.css('display'),
                             'position': $element.css('position') == 'static' ? 'relative' : $element.css('position'),
                             'float':    $element.css('float'),
@@ -843,7 +911,7 @@
                         });
 
                         // create the actual calendar icon (show a disabled icon if the element is disabled)
-                        icon = jQuery('<button type="button" class="Zebra_DatePicker_Icon' + ($element.attr('disabled') == 'disabled' ? ' Zebra_DatePicker_Icon_Disabled' : '') + '">Pick a date</button>');
+                        icon = $('<button type="button" class="Zebra_DatePicker_Icon' + ($element.attr('disabled') == 'disabled' ? ' Zebra_DatePicker_Icon_Disabled' : '') + '">Pick a date</button>');
 
                         // a reference to the icon, as a global property
                         plugin.icon = icon;
@@ -863,7 +931,7 @@
                         if (!$element.attr('disabled'))
 
                             // if the date picker is visible, hide it
-                            if (datepicker.css('display') != 'none') plugin.hide();
+                            if (datepicker.hasClass('dp_visible')) plugin.hide();
 
                             // if the date picker is not visible, show it
                             else plugin.show();
@@ -917,6 +985,12 @@
                             'top':  element_margin_top + ((element_height - icon_height) / 2),
                             'left': element_margin_left + element_width + icon_margin_left
                         });
+
+                    // assume the datepicker is not disabled
+                    icon.removeClass(' Zebra_DatePicker_Icon_Disabled');
+
+                    // if element the datepicker is attached to became disabled, disable the calendar icon, too
+                    if ($element.attr('disabled') == 'disabled') icon.addClass('Zebra_DatePicker_Icon_Disabled');
 
                 }
 
@@ -1009,10 +1083,10 @@
             // add the mouseover/mousevents to all to the date picker's cells
             // except those that are not selectable
             datepicker.
-                delegate('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month, .dp_blocked, .dp_week_number)', 'mouseover', function() {
+                delegate('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month, .dp_week_number)', 'mouseover', function() {
                     $(this).addClass('dp_hover');
                 }).
-                delegate('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month, .dp_blocked, .dp_week_number)', 'mouseout', function() {
+                delegate('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month, .dp_week_number)', 'mouseout', function() {
                     $(this).removeClass('dp_hover');
                 });
 
@@ -1023,32 +1097,27 @@
             // event for when clicking the "previous" button
             $('.dp_previous', header).bind('click', function() {
 
-                // if button is not disabled
-                if (!$(this).hasClass('dp_blocked')) {
+                // if view is "months"
+                // decrement year by one
+                if (view == 'months') selected_year--;
 
-                    // if view is "months"
-                    // decrement year by one
-                    if (view == 'months') selected_year--;
+                // if view is "years"
+                // decrement years by 12
+                else if (view == 'years') selected_year -= 12;
 
-                    // if view is "years"
-                    // decrement years by 12
-                    else if (view == 'years') selected_year -= 12;
+                // if view is "days"
+                // decrement the month and
+                // if month is out of range
+                else if (--selected_month < 0) {
 
-                    // if view is "days"
-                    // decrement the month and
-                    // if month is out of range
-                    else if (--selected_month < 0) {
-
-                        // go to the last month of the previous year
-                        selected_month = 11;
-                        selected_year--;
-
-                    }
-
-                    // generate the appropriate view
-                    manage_views();
+                    // go to the last month of the previous year
+                    selected_month = 11;
+                    selected_year--;
 
                 }
+
+                // generate the appropriate view
+                manage_views();
 
             });
 
@@ -1072,32 +1141,27 @@
             // event for when clicking the "next" button
             $('.dp_next', header).bind('click', function() {
 
-                // if button is not disabled
-                if (!$(this).hasClass('dp_blocked')) {
+                // if view is "months"
+                // increment year by 1
+                if (view == 'months') selected_year++;
 
-                    // if view is "months"
-                    // increment year by 1
-                    if (view == 'months') selected_year++;
+                // if view is "years"
+                // increment years by 12
+                else if (view == 'years') selected_year += 12;
 
-                    // if view is "years"
-                    // increment years by 12
-                    else if (view == 'years') selected_year += 12;
+                // if view is "days"
+                // increment the month and
+                // if month is out of range
+                else if (++selected_month == 12) {
 
-                    // if view is "days"
-                    // increment the month and
-                    // if month is out of range
-                    else if (++selected_month == 12) {
-
-                        // go to the first month of the next year
-                        selected_month = 0;
-                        selected_year++;
-
-                    }
-
-                    // generate the appropriate view
-                    manage_views();
+                    // go to the first month of the next year
+                    selected_month = 0;
+                    selected_year++;
 
                 }
+
+                // generate the appropriate view
+                manage_views();
 
             });
 
@@ -1225,7 +1289,7 @@
                 if (plugin.settings.onClear && typeof plugin.settings.onClear == 'function')
 
                     // execute the callback function and pass as argument the element the plugin is attached to
-                    plugin.settings.onClear($element);
+                    plugin.settings.onClear.call($element, $element);
 
             });
 
@@ -1239,7 +1303,7 @@
                     'mousedown.Zebra_DatePicker': function(e) {
 
                         // if the date picker is visible
-                        if (datepicker.css('display') == 'block') {
+                        if (datepicker.hasClass('dp_visible')) {
 
                             // if the calendar icon is visible and we clicked it, let the onClick event of the icon to handle the event
                             // (we want it to toggle the date picker)
@@ -1259,7 +1323,7 @@
                         // if the date picker is visible
                         // and the pressed key is ESC
                         // hide the date picker
-                        if (datepicker.css('display') == 'block' || e.which == 27) plugin.hide();
+                        if (datepicker.hasClass('dp_visible') && e.which == 27) plugin.hide();
 
                     }
 
@@ -1291,9 +1355,6 @@
             // remove association with the element
             $element.removeData('Zebra_DatePicker');
 
-            // completely delete object
-            delete plugin;
-
         };
 
         /**
@@ -1310,7 +1371,7 @@
                 iframeShim('hide');
 
                 // hide the date picker
-                datepicker.hide();
+                datepicker.removeClass('dp_visible').addClass('dp_hidden');
 
             }
 
@@ -1390,9 +1451,13 @@
                     window_scroll_top = $(window).scrollTop(),
                     window_scroll_left = $(window).scrollLeft();
 
+                if (plugin.settings.default_position == 'below')
+                    top = (undefined !== icon ? icon.offset().top : $element.offset().top) + plugin.settings.offset[1];
+
                 // if date picker is outside the viewport, adjust its position so that it is visible
                 if (left + datepicker_width > window_scroll_left + window_width) left = window_scroll_left + window_width - datepicker_width;
                 if (left < window_scroll_left) left = window_scroll_left;
+
                 if (top + datepicker_height > window_scroll_top + window_height) top = window_scroll_top + window_height - datepicker_height;
                 if (top < window_scroll_top) top = window_scroll_top;
 
@@ -1404,13 +1469,19 @@
 
                 // fade-in the date picker
                 // for Internet Explorer < 9 show the date picker instantly or fading alters the font's weight
-                datepicker.fadeIn(browser.name == 'explorer' && browser.version < 9 ? 0 : 150, 'linear');
+                datepicker.removeClass('dp_hidden').addClass('dp_visible');
 
                 // show the iFrameShim in Internet Explorer 6
                 iframeShim();
 
             // if date picker is always visible, show it
-            } else datepicker.show();
+            } else datepicker.removeClass('dp_hidden').addClass('dp_visible');
+
+            // if a callback function exists for when showing the date picker
+            if (plugin.settings.onOpen && typeof plugin.settings.onOpen == 'function')
+
+                // execute the callback function and pass as argument the element the plugin is attached to
+                plugin.settings.onOpen.call($element, $element);
 
         };
 
@@ -1533,7 +1604,7 @@
                         // check if date is a valid date (i.e. there's no February 31)
 
                         var tmpdate = new Date(),
-                            original_day = tmpdate.getDate(),
+                            original_day = 1,
                             original_month = tmpdate.getMonth() + 1,
                             original_year = tmpdate.getFullYear(),
                             english_days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
@@ -1828,7 +1899,7 @@
             days_from_previous_month = days_from_previous_month < 0 ? 7 + days_from_previous_month : days_from_previous_month;
 
             // manage header caption and enable/disable navigation buttons if necessary
-            manage_header(plugin.settings.months[selected_month] + ', ' + selected_year);
+            manage_header(plugin.settings.header_captions['days']);
 
             // start generating the HTML
             var html = '<tr>';
@@ -1942,7 +2013,7 @@
 
                 // cache all the cells
                 // (we need them so that we can easily remove the "dp_selected" class from all of them when user selects a date)
-                daypicker_cells = $('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month, .dp_blocked, .dp_week_number)', daypicker);
+                daypicker_cells = $('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month, .dp_week_number)', daypicker);
 
             // make the day picker visible
             daypicker.show();
@@ -1959,7 +2030,7 @@
         var generate_monthpicker = function() {
 
             // manage header caption and enable/disable navigation buttons if necessary
-            manage_header(selected_year);
+            manage_header(plugin.settings.header_captions['months']);
 
             // start generating the HTML
             var html = '<tr>';
@@ -1976,7 +2047,7 @@
                 if (is_disabled(selected_year, i)) class_name += ' dp_disabled';
 
                 // else, if a date is already selected and this is that particular month, highlight it
-                else if (default_month !== false && default_month == i) class_name += ' dp_selected';
+                else if (default_month !== false && default_month == i && selected_year == default_year) class_name += ' dp_selected';
 
                 // else, if this the current system month, highlight it
                 else if (current_system_month == i && current_system_year == selected_year) class_name += ' dp_current';
@@ -2014,7 +2085,7 @@
         var generate_yearpicker = function() {
 
             // manage header caption and enable/disable navigation buttons if necessary
-            manage_header(selected_year - 7 + ' - ' + (selected_year + 4));
+            manage_header(plugin.settings.header_captions['years']);
 
             // start generating the HTML
             var html = '<tr>';
@@ -2079,11 +2150,10 @@
                     var zIndex = to_int(datepicker.css('zIndex')) - 1;
 
                     // create the iFrame
-                    shim = jQuery('<iframe>', {
+                    shim = $('<iframe>', {
                         'src':                  'javascript:document.write("")',
                         'scrolling':            'no',
                         'frameborder':          0,
-                        'allowtransparency':    'true',
                         css: {
                             'zIndex':       zIndex,
                             'position':     'absolute',
@@ -2339,67 +2409,61 @@
          */
         var manage_header = function(caption) {
 
+            // if "selected_month" has a value
+            // $.isNumeric is available only from jQuery 1.7 - thanks to birla for the fix!
+            if (!isNaN(parseFloat(selected_month)) && isFinite(selected_month))
+
+                caption = caption.replace(/\bm\b|\bn\b|\bF\b|\bM\b/, function (match) {
+
+                    switch (match) {
+
+                        // month number, prefixed with 0
+                        case 'm':
+                            return str_pad(selected_month + 1, 2);
+
+                        // month number, not prefixed with 0
+                        case 'n':
+                            return selected_month + 1;
+
+                        // full month name
+                        case 'F':
+                            return plugin.settings.months[selected_month];
+
+                        // month name, three letters
+                        case 'M':
+                            return ($.isArray(plugin.settings.months_abbr) && undefined !== plugin.settings.months_abbr[selected_month] ? plugin.settings.months_abbr[selected_month] : plugin.settings.months[selected_month].substr(0, 3));
+
+                        // unknown replace
+                        default:
+                            return match;
+
+                    }
+
+                });
+
+            // if "selected_year" has a value
+            // $.isNumeric is available only from jQuery 1.7 - thanks to birla for the fix!
+            if (!isNaN(parseFloat(selected_year)) && isFinite(selected_year))
+
+                // replace year-related patterns
+                caption =
+
+                    caption.
+
+                    // year as four digits
+                    replace(/\bY\b/, selected_year).
+
+                    // year as two digits
+                    replace(/\by\b/, (selected_year + '').substr(2)).
+
+                    // lower limit of year as two or four digits
+                    replace(/\bY1\b/i, selected_year - 7).
+
+                    // upper limit of year as two or four digits
+                    replace(/\bY2\b/i, selected_year + 4);
+
             // update the caption in the header
             $('.dp_caption', header).html(caption);
-
-            // if calendar has direction restrictions or we're looking only at months
-            if (!(!$.isArray(plugin.settings.direction) && to_int(plugin.settings.direction) === 0) || (views.length == 1 && views[0] == 'months')) {
-
-                // get the current year and month
-                var year = selected_year,
-                    month = selected_month,
-                    next, previous;
-
-                // if current view is showing days
-                if (view == 'days') {
-
-                    // check if we can click on the "previous" button
-                    previous = !is_disabled(month - 1 < 0 ? str_concat(year - 1, '11') : str_concat(year, str_pad(month - 1, 2)));
-
-                    // check if we can click on the "next" button
-                    next = !is_disabled(month + 1 > 11 ? str_concat(year + 1, '00') : str_concat(year, str_pad(month + 1, 2)));
-
-                // if current view is showing months
-                } else if (view == 'months') {
-
-                    // check if we can click on the "previous" button
-                    if (!start_date || start_date.getFullYear() <= year - 1) previous = true;
-
-                    // check if we can click on the "next" button
-                    if (!end_date || end_date.getFullYear() >= year + 1) next = true;
-
-                // if current view is showing years
-                } else if (view == 'years') {
-
-                    // check if we can click on the "previous" button
-                    if (!start_date || start_date.getFullYear() < year - 7) previous = true;
-
-                    // check if we can click on the "next" button
-                    if (!end_date || end_date.getFullYear() > year + 4) next = true;
-
-                }
-
-                // if we cannot click on the "previous" button
-                if (!previous) {
-
-                    // disable the "previous" button
-                    $('.dp_previous', header).addClass('dp_blocked');
-                    $('.dp_previous', header).removeClass('dp_hover');
-
-                // otherwise enable the "previous" button
-                } else $('.dp_previous', header).removeClass('dp_blocked');
-
-                // if we cannot click on the "next" button
-                if (!next) {
-
-                    // disable the "next" button
-                    $('.dp_next', header).addClass('dp_blocked');
-                    $('.dp_next', header).removeClass('dp_hover');
-
-                // otherwise enable the "next" button
-                } else $('.dp_next', header).removeClass('dp_blocked');
-
-            }
 
         };
 
@@ -2427,7 +2491,7 @@
 
                     // temporarily make the date picker visible
                     // so that we can later grab its width and height
-                    datepicker.show();
+                    datepicker.css('visibility', 'visible');
 
                     // generate the day picker
                     generate_daypicker();
@@ -2453,7 +2517,7 @@
                     footer.css('width', width);
 
                     // hide the date picker again
-                    datepicker.hide();
+                    datepicker.css('visibility', '').addClass('dp_hidden');
 
                 // if the day picker was previously generated at least once
                 // generate the day picker
@@ -2490,10 +2554,10 @@
 
                 // get the "active" elements in the view (ignoring the disabled ones)
                 var elements = (view == 'days' ?
-                                    daypicker.find('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month, .dp_blocked)') :
+                                    daypicker.find('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month)') :
                                         (view == 'months' ?
-                                            monthpicker.find('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month, .dp_blocked)') :
-                                                yearpicker.find('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month, .dp_blocked)')));
+                                            monthpicker.find('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month)') :
+                                                yearpicker.find('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month)')));
 
                 // iterate through the active elements
                 // and attach a "date" data attribute to each element in the form of
@@ -2540,7 +2604,7 @@
 
                 // execute the callback function and send as arguments the current view, the elements in the view, and
                 // the element the plugin is attached to
-                plugin.settings.onChange(view, elements, $element);
+                plugin.settings.onChange.call($element, view, elements, $element);
 
             }
 
@@ -2662,8 +2726,9 @@
             if (plugin.settings.onSelect && typeof plugin.settings.onSelect == 'function')
 
                 // execute the callback function
-                plugin.settings.onSelect(selected_value, year + '-' + str_pad(month + 1, 2) + '-' + str_pad(day, 2), default_date, $element);
-
+                // make "this" inside the callback function refer to the element the date picker is attached to
+                plugin.settings.onSelect.call($element, selected_value, year + '-' + str_pad(month + 1, 2) + '-' + str_pad(day, 2), default_date, $element, getWeekNumber(default_date));
+                
             // move focus to the element the plugin is attached to
             $element.focus();
 
