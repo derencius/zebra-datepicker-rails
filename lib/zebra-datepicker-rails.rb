@@ -3,10 +3,15 @@ require "zebra-datepicker-rails/version"
 
 module ZebraDatepickerRails
   module Rails
-    if ::Rails.version.to_s < "3.1"
-      require "zebra-datepicker-rails/railtie"
-    else
-      require "zebra-datepicker-rails/engine"
-    end
   end
+end
+
+
+case ::Rails.version.to_s
+when /^4/
+  require 'zebra-datepicker-rails/engine'
+when /^3\.[12]/
+  require 'zebra-datepicker-rails/engine3'
+when /^3\.[0]/
+  require 'zebra-datepicker-rails/railtie'
 end
