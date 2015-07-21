@@ -1,0 +1,3 @@
+[submodule "Zebra_Datepicker"]
+	path = Zebra_Datepicker
+	url = git@github.com:stefangabos/Zebra_Datepicker.git

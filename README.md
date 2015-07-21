@@ -1,10 +1,6 @@
 # Zebra Datepicker for Rails
 
-zebra-datepicker-rails gem integrates the Zebra Datepicker with Rails assets pipeline.
-
-http://github.com/derencius/zebra-datepicker-rails
-
-https://github.com/stefangabos/Zebra_Datepicker/
+[zebra-datepicker-rails](http://github.com/derencius/zebra-datepicker-rails) gem integrates the [Zebra Datepicker](https://github.com/stefangabos/Zebra_Datepicker) with Rails assets pipeline.
 
 ## Rails > 3.1
 Include zebra-datepicker-rails in Gemfile;
