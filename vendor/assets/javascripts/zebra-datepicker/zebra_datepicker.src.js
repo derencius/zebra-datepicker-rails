@@ -8,12 +8,25 @@
  *  For more resources visit {@link http://stefangabos.ro/}
  *
  *  @author     Stefan Gabos <contact@stefangabos.ro>
- *  @version    1.8.9 (last revision: August 16, 2014)
- *  @copyright  (c) 2011 - 2014 Stefan Gabos
+ *  @version    1.9.2 (last revision: April 30, 2015)
+ *  @copyright  (c) 2011 - 2015 Stefan Gabos
  *  @license    http://www.gnu.org/licenses/lgpl-3.0.txt GNU LESSER GENERAL PUBLIC LICENSE
  *  @package    Zebra_DatePicker
  */
-;(function($) {
+;(function(factory) {
+
+    'use strict';
+
+    // AMD
+    if (typeof define === 'function' && define.amd) define(['jquery'], factory);
+
+    // CommonJS
+    else if (typeof exports === 'object') factory(require('jquery'));
+
+    // browser globals
+    else factory(jQuery);
+
+}(function($) {
 
     'use strict';
 
@@ -24,6 +37,14 @@
             //  setting this property to a jQuery element, will result in the date picker being always visible, the indicated
             //  element being the date picker's container;
             always_visible: false,
+
+            //  by default, the date picker is injected into the <body>; use this property to tell the library to inject
+            //  the date picker into a custom element - useful when you want the date picker to open at a specific position
+            //
+            //  must be a jQuery element
+            //
+            //  default is $('body')
+            container: $('body'),
 
             //  days of the week; Sunday to Saturday
             days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
@@ -89,6 +110,9 @@
             //  ['01 07 2012', '02 07 2012', '* 08 2012'] would disable 1st and 2nd of July 2012, and all of August of 2012
             //
             //  default is FALSE, no disabled dates
+            //
+            //  DISABLING ALL DATES AND NOT SPECIFYING AT LEAST ONE ENABLED DATE WILL SEND THE SCRIPT INTO AN INFINITE
+            //  LOOP SEARCHING FOR AN ENABLED DATE TO DISPLAY!
             disabled_dates: false,
 
             //  an array of enabled dates in the same format as required for "disabled_dates" property.
@@ -319,6 +343,15 @@
             //  the "this" keyword inside the callback function refers to the element the date picker is attached to!
             onOpen: null,
 
+            //  callback function to be executed when the date picker is closed, but only when the "always_visible"
+            //  property is set to FALSE
+            //  the callback function takes a single argument:
+            //  -   a reference to the element the date picker is attached to, as a jQuery object (deprecated - use the
+            //      "this" keyword inside the callback function to refer to the element the date picker is attached to)
+            //
+            //  the "this" keyword inside the callback function refers to the element the date picker is attached to!
+            onClose: null,
+
             //  callback function to be executed when a date is selected
             //  the callback function takes 5 arguments:
             //  -   the date in the format specified by the "format" attribute;
@@ -338,7 +371,7 @@
             current_system_day, first_selectable_month, first_selectable_year, first_selectable_day, selected_month, selected_year,
             default_day, default_month, default_year, enabled_dates, disabled_dates, shim, start_date, end_date, last_selectable_day,
             last_selectable_year, last_selectable_month, daypicker_cells, monthpicker_cells, yearpicker_cells, views, clickables,
-            selecttoday, footer, show_select_today, timeout;
+            selecttoday, footer, show_select_today, timeout, uniqueid;
 
         var plugin = this;
 
@@ -354,6 +387,11 @@
          *  @return void
          */
         var init = function(update) {
+
+            // generate a random ID for each date picker (we'll use this if later a certain date picker is destroyed to
+            // remove related events)
+            // the code is taken from http://stackoverflow.com/a/105074
+            uniqueid = Math.floor((1 + Math.random()) * 0x10000).toString(16);
 
             // unless we're just updating settings
             if (!update) {
@@ -1004,7 +1042,7 @@
             if (update) return;
 
             // update icon/date picker position on resize
-            $(window).bind('resize.Zebra_DatePicker', function() {
+            $(window).bind('resize.Zebra_DatePicker_' + uniqueid, function() {
 
                 // hide the date picker
                 plugin.hide();
@@ -1067,7 +1105,7 @@
             if (!plugin.settings.always_visible)
 
                 // inject the container into the DOM
-                $('body').append(datepicker);
+                plugin.settings.container.append(datepicker);
 
             // otherwise, if element is not disabled
             else if (!$element.attr('disabled')) {
@@ -1169,7 +1207,7 @@
             daypicker.delegate('td:not(.dp_disabled, .dp_weekend_disabled, .dp_not_in_month, .dp_week_number)', 'click', function() {
 
                 // if other months are selectable and currently clicked cell contains a class with the cell's date
-                if (plugin.settings.select_other_months && null !== (matches = $(this).attr('class').match(/date\_([0-9]{4})(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])/)))
+                if (plugin.settings.select_other_months && $(this).attr('class') && null !== (matches = $(this).attr('class').match(/date\_([0-9]{4})(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])/)))
 
                     // use the stored date
                     select_date(matches[1], matches[2] - 1, matches[3], 'days', $(this));
@@ -1294,40 +1332,37 @@
             });
 
             // if date picker is not always visible
-            if (!plugin.settings.always_visible)
+            if (!plugin.settings.always_visible) {
 
-                // bind some events to the document
-                $(document).bind({
+                //whenever anything is clicked on the page
+                $(document).bind('mousedown.Zebra_DatePicker_' + uniqueid + ', touchstart.Zebra_DatePicker_' + uniqueid, function(e) {
 
-                    //whenever anything is clicked on the page
-                    'mousedown.Zebra_DatePicker': function(e) {
+                    // if the date picker is visible
+                    if (datepicker.hasClass('dp_visible')) {
 
-                        // if the date picker is visible
-                        if (datepicker.hasClass('dp_visible')) {
+                        // if the calendar icon is visible and we clicked it, let the onClick event of the icon to handle the event
+                        // (we want it to toggle the date picker)
+                        if (plugin.settings.show_icon && $(e.target).get(0) === icon.get(0)) return true;
 
-                            // if the calendar icon is visible and we clicked it, let the onClick event of the icon to handle the event
-                            // (we want it to toggle the date picker)
-                            if (plugin.settings.show_icon && $(e.target).get(0) === icon.get(0)) return true;
-
-                            // if what's clicked is not inside the date picker
-                            // hide the date picker
-                            if ($(e.target).parents().filter('.Zebra_DatePicker').length === 0) plugin.hide();
-
-                        }
-
-                    },
-
-                    //whenever a key is pressed on the page
-                    'keyup.Zebra_DatePicker': function(e) {
-
-                        // if the date picker is visible
-                        // and the pressed key is ESC
+                        // if what's clicked is not inside the date picker
                         // hide the date picker
-                        if (datepicker.hasClass('dp_visible') && e.which == 27) plugin.hide();
+                        if ($(e.target).parents().filter('.Zebra_DatePicker').length === 0) plugin.hide();
 
                     }
 
                 });
+
+                //whenever a key is pressed on the page
+                $(document).bind('keyup.Zebra_DatePicker_' + uniqueid, function(e) {
+
+                    // if the date picker is visible
+                    // and the pressed key is ESC
+                    // hide the date picker
+                    if (datepicker.hasClass('dp_visible') && e.which == 27) plugin.hide();
+
+                });
+
+            }
 
             // last thing is to pre-render some of the date picker right away
             manage_views();
@@ -1348,9 +1383,9 @@
             plugin.datepicker.remove();
 
             // remove associated event handlers from the document
-            $(document).unbind('keyup.Zebra_DatePicker');
-            $(document).unbind('mousedown.Zebra_DatePicker');
-            $(window).unbind('resize.Zebra_DatePicker');
+            $(document).unbind('keyup.Zebra_DatePicker_' + uniqueid);
+            $(document).unbind('mousedown.Zebra_DatePicker_' + uniqueid);
+            $(window).unbind('resize.Zebra_DatePicker_' + uniqueid);
 
             // remove association with the element
             $element.removeData('Zebra_DatePicker');
@@ -1373,6 +1408,11 @@
                 // hide the date picker
                 datepicker.removeClass('dp_visible').addClass('dp_hidden');
 
+                // if a callback function exists for when hiding the date picker
+                if (plugin.settings.onClose && typeof plugin.settings.onClose == 'function')
+
+                    // execute the callback function and pass as argument the element the plugin is attached to
+                    plugin.settings.onClose.call($element, $element);
             }
 
         };
@@ -1430,42 +1470,53 @@
             // if date picker is not always visible and the calendar icon is visible
             if (!plugin.settings.always_visible) {
 
-                var
+                // if date picker is to be injected into the <body>
+                if (plugin.settings.container.is('body')) {
 
-                    // get the date picker width and height
-                    datepicker_width = datepicker.outerWidth(),
-                    datepicker_height = datepicker.outerHeight(),
+                    var
 
-                    // compute the date picker's default left and top
-                    // this will be computed relative to the icon's top-right corner (if the calendar icon exists), or
-                    // relative to the element's top-right corner otherwise, to which the offsets given at initialization
-                    // are added/subtracted
-                    left = (undefined !== icon ? icon.offset().left + icon.outerWidth(true) : $element.offset().left + $element.outerWidth(true)) + plugin.settings.offset[0],
-                    top = (undefined !== icon ? icon.offset().top : $element.offset().top) - datepicker_height + plugin.settings.offset[1],
+                        // get the date picker width and height
+                        datepicker_width = datepicker.outerWidth(),
+                        datepicker_height = datepicker.outerHeight(),
 
-                    // get browser window's width and height
-                    window_width = $(window).width(),
-                    window_height = $(window).height(),
+                        // compute the date picker's default left and top
+                        // this will be computed relative to the icon's top-right corner (if the calendar icon exists), or
+                        // relative to the element's top-right corner otherwise, to which the offsets given at initialization
+                        // are added/subtracted
+                        left = (undefined !== icon ? icon.offset().left + icon.outerWidth(true) : $element.offset().left + $element.outerWidth(true)) + plugin.settings.offset[0],
+                        top = (undefined !== icon ? icon.offset().top : $element.offset().top) - datepicker_height + plugin.settings.offset[1],
 
-                    // get browser window's horizontal and vertical scroll offsets
-                    window_scroll_top = $(window).scrollTop(),
-                    window_scroll_left = $(window).scrollLeft();
+                        // get browser window's width and height
+                        window_width = $(window).width(),
+                        window_height = $(window).height(),
 
-                if (plugin.settings.default_position == 'below')
-                    top = (undefined !== icon ? icon.offset().top : $element.offset().top) + plugin.settings.offset[1];
+                        // get browser window's horizontal and vertical scroll offsets
+                        window_scroll_top = $(window).scrollTop(),
+                        window_scroll_left = $(window).scrollLeft();
 
-                // if date picker is outside the viewport, adjust its position so that it is visible
-                if (left + datepicker_width > window_scroll_left + window_width) left = window_scroll_left + window_width - datepicker_width;
-                if (left < window_scroll_left) left = window_scroll_left;
+                    if (plugin.settings.default_position == 'below')
+                        top = (undefined !== icon ? icon.offset().top : $element.offset().top) + plugin.settings.offset[1];
 
-                if (top + datepicker_height > window_scroll_top + window_height) top = window_scroll_top + window_height - datepicker_height;
-                if (top < window_scroll_top) top = window_scroll_top;
+                    // if date picker is outside the viewport, adjust its position so that it is visible
+                    if (left + datepicker_width > window_scroll_left + window_width) left = window_scroll_left + window_width - datepicker_width;
+                    if (left < window_scroll_left) left = window_scroll_left;
 
-                // make the date picker visible
-                datepicker.css({
-                    'left':     left,
-                    'top':      top
-                });
+                    if (top + datepicker_height > window_scroll_top + window_height) top = window_scroll_top + window_height - datepicker_height;
+                    if (top < window_scroll_top) top = window_scroll_top;
+
+                    // make the date picker visible
+                    datepicker.css({
+                        'left': left,
+                        'top':  top
+                    });
+
+                // if date picker is to be injected into a custom container element
+                } else
+
+                    datepicker.css({
+                        'left': 0,
+                        'top':  0
+                    });
 
                 // fade-in the date picker
                 // for Internet Explorer < 9 show the date picker instantly or fading alters the font's weight
@@ -1995,8 +2046,8 @@
 
                     }
 
-                    // print the day of the month
-                    html += '<td' + (class_name !== '' ? ' class="' + $.trim(class_name) + '"' : '') + '>' + (plugin.settings.zero_pad ? str_pad(day, 2) : day) + '</td>';
+                    // print the day of the month (if "day" is NaN, use an empty string instead)
+                    html += '<td' + (class_name !== '' ? ' class="' + $.trim(class_name) + '"' : '') + '>' + ((plugin.settings.zero_pad ? str_pad(day, 2) : day) || '') + '</td>';
 
                 }
 
@@ -2728,7 +2779,7 @@
                 // execute the callback function
                 // make "this" inside the callback function refer to the element the date picker is attached to
                 plugin.settings.onSelect.call($element, selected_value, year + '-' + str_pad(month + 1, 2) + '-' + str_pad(day, 2), default_date, $element, getWeekNumber(default_date));
-                
+
             // move focus to the element the plugin is attached to
             $element.focus();
 
@@ -2962,4 +3013,4 @@
 
     };
 
-})(jQuery);
+}));
