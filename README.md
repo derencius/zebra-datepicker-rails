@@ -43,7 +43,7 @@ Use Github Issues.
 
 ## Thanks To
 
-This project is based on https://raw.github.com/Nerian/bootstrap-datepicker-rails
+This project is based on https://github.com/Nerian/bootstrap-datepicker-rails
 
 ## License
 Copyright (c) 2013 Marcus Derencius
