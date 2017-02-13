@@ -8,8 +8,8 @@
  *  For more resources visit {@link http://stefangabos.ro/}
  *
  *  @author     Stefan Gabos <contact@stefangabos.ro>
- *  @version    1.9.2 (last revision: April 30, 2015)
- *  @copyright  (c) 2011 - 2015 Stefan Gabos
+ *  @version    1.9.5 (last revision: May 13, 2016)
+ *  @copyright  (c) 2011 - 2016 Stefan Gabos
  *  @license    http://www.gnu.org/licenses/lgpl-3.0.txt GNU LESSER GENERAL PUBLIC LICENSE
  *  @package    Zebra_DatePicker
  */
@@ -45,6 +45,27 @@
             //
             //  default is $('body')
             container: $('body'),
+
+            //  dates that should have custom classes applied to them
+            //  an object in the form of
+            //  {
+            //      'myclass1': [dates_to_apply_the_custom_class_to],
+            //      'myclass2': [dates_to_apply_the_custom_class_to]
+            //  }
+            //  where "dates_to_apply_the_custom_class_to" is an array of dates in the same format as required for
+            //  "disabled_dates" property.
+            //
+            //  custom classes will be applied *only* in the day picker view and not on month/year views!
+            //  also note that the class name will have the "_disabled" suffix added if the day the class is applied to
+            //  is disabled
+            //
+            //  in order for the styles in your custom classes to be applied, make sure you are using the following syntax:
+            //
+            //  .Zebra_DatePicker .dp_daypicker td.myclass1 { .. }
+            //  .Zebra_DatePicker .dp_daypicker td.myclass1_disabled { .. }
+            //
+            //  default is FALSE, no custom classes
+            custom_classes: false,
 
             //  days of the week; Sunday to Saturday
             days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
@@ -184,6 +205,12 @@
             //  default is ['&#171;','&#187;']
             header_navigation: ['&#171;', '&#187;'],
 
+            //  icon's position
+            //  accepted values are "left" and "right"
+            //
+            //  default is "right"
+            icon_position: 'right',
+
             //  should the icon for opening the datepicker be inside the element?
             //  if set to FALSE, the icon will be placed to the right of the parent element, while if set to TRUE it will
             //  be placed to the right of the parent element, but *inside* the element itself
@@ -214,6 +241,12 @@
             //
             //  default is [5, -5]
             offset: [5, -5],
+
+            //  set whether the date picker should be shown *only* when clicking the icon
+            //  note that if you set the "show_icon" property to FALSE, you will not be able to show the date picker anymore!
+            //
+            //  default is FALSE
+            open_icon_only: false,
 
             //  if set as a jQuery element with a Zebra_DatePicker attached, that particular date picker will use the
             //  current date picker's value as starting date
@@ -371,7 +404,7 @@
             current_system_day, first_selectable_month, first_selectable_year, first_selectable_day, selected_month, selected_year,
             default_day, default_month, default_year, enabled_dates, disabled_dates, shim, start_date, end_date, last_selectable_day,
             last_selectable_year, last_selectable_month, daypicker_cells, monthpicker_cells, yearpicker_cells, views, clickables,
-            selecttoday, footer, show_select_today, timeout, uniqueid;
+            selecttoday, footer, show_select_today, timeout, uniqueid, custom_classes, custom_class_names, original_attributes = {};
 
         var plugin = this;
 
@@ -393,11 +426,15 @@
             // the code is taken from http://stackoverflow.com/a/105074
             uniqueid = Math.floor((1 + Math.random()) * 0x10000).toString(16);
 
-            // unless we're just updating settings
+            // unless we're not just updating settings
             if (!update) {
 
                 // merge default settings with user-settings (
                 plugin.settings = $.extend({}, defaults, options);
+
+                // preserve some of element's original attributes
+                original_attributes['readonly'] = $element.attr('readonly');
+                original_attributes['style'] = $element.attr('style');
 
                 // iterate through the element's data attributes (if any)
                 for (var data in $element.data())
@@ -482,18 +519,23 @@
             // parse the rules for disabling dates and turn them into arrays of arrays
 
             // array that will hold the rules for enabling/disabling dates
-            disabled_dates = []; enabled_dates = [];
+            disabled_dates = []; enabled_dates = []; custom_classes = {}; custom_class_names = [];
 
             var dates;
 
-            // it's the same logic for preparing the enabled/disable dates...
-            for (var l = 0; l < 2; l++) {
+            for (var k in plugin.settings.custom_classes) if (plugin.settings.custom_classes.hasOwnProperty(k)) custom_class_names.push(k);
+
+            // it's the same logic for preparing the enabled/disable dates, as well as dates that have custom classes
+            for (var l = 0; l < 2 + custom_class_names.length; l++) {
 
                 // first time we're doing disabled dates,
                 if (l === 0) dates = plugin.settings.disabled_dates;
 
                 // second time we're doing enabled_dates
-                else dates = plugin.settings.enabled_dates;
+                else if (l == 1) dates = plugin.settings.enabled_dates;
+
+                // otherwise, we're doing dates that will have custom classes
+                else dates = plugin.settings.custom_classes[custom_class_names[l - 2]];
 
                 // if we have a non-empty array
                 if ($.isArray(dates) && dates.length > 0)
@@ -552,7 +594,15 @@
                         if (l === 0) disabled_dates.push(rules);
 
                         // second time we're doing enabled_dates
-                        else enabled_dates.push(rules);
+                        else if (l == 1) enabled_dates.push(rules);
+
+                        // otherwise, we're doing the dates to which custom classes need to be applied
+                        else {
+
+                            if (undefined === custom_classes[custom_class_names[l - 2]]) custom_classes[custom_class_names[l - 2]] = [];
+                            custom_classes[custom_class_names[l - 2]].push(rules);
+
+                        }
 
                     });
 
@@ -909,7 +959,7 @@
 
             // updates value for the date picker whose starting date depends on the selected date (if any)
             if (!update && (undefined !== start_date || undefined !== default_date))
-                update_dependent(undefined !== start_date ? start_date : default_date);
+                update_dependent(undefined !== default_date ? default_date : start_date);
 
             // if date picker is not always visible
             if (!plugin.settings.always_visible) {
@@ -938,6 +988,10 @@
                             'left':     $element.css('left')
                         });
 
+                        // if parent element has its "display" property set to "block"
+                        // the wrapper has to have its "width" set
+                        if ($element.css('display') == 'block') icon_wrapper.css('width', $element.outerWidth(true));
+
                         // put wrapper around the element
                         // also, make sure we set some important css properties for it
                         $element.wrap(icon_wrapper).css({
@@ -955,13 +1009,14 @@
                         plugin.icon = icon;
 
                         // the date picker will open when clicking both the icon and the element the plugin is attached to
-                        clickables = icon.add($element);
+                        // (or the icon only, if set so)
+                        clickables = plugin.settings.open_icon_only ? icon : icon.add($element);
 
                     // if calendar icon is not visible, the date picker will open when clicking the element
                     } else clickables = $element;
 
                     // attach the click event to the clickable elements (icon and/or element)
-                    clickables.bind('click', function(e) {
+                    clickables.bind('click.Zebra_DatePicker_' + uniqueid, function(e) {
 
                         e.preventDefault();
 
@@ -975,6 +1030,19 @@
                             else plugin.show();
 
                     });
+
+                    // if users can manually enter dates and a pair date element exists
+                    if (!plugin.settings.readonly_element && plugin.settings.pair)
+
+                        // whenever the element looses focus
+                        $element.bind('blur.Zebra_DatePicker_' + uniqueid, function() {
+
+                            var date;
+
+                            // if a valid date was entered, update the paired date picker
+                            if ((date = check_date($(this).val())) && !is_disabled(date.getFullYear(), date.getMonth(), date.getDate())) update_dependent(date);
+
+                        });
 
                     // if icon exists, inject it into the DOM, right after the parent element (and inside the wrapper)
                     if (undefined !== icon) icon.insertAfter($element);
@@ -990,11 +1058,11 @@
 
                     // if calendar icon is to be placed *inside* the element
                     // add an extra class to the icon
-                    if (plugin.settings.inside) icon.addClass('Zebra_DatePicker_Icon_Inside');
+                    if (plugin.settings.inside) icon.addClass('Zebra_DatePicker_Icon_Inside_' + (plugin.settings.icon_position == 'right' ? 'Right' : 'Left'));
 
                     var
 
-                        // get element' width and height (including margins)
+                        // get element's width and height (including margins)
                         element_width = $element.outerWidth(),
                         element_height = $element.outerHeight(),
                         element_margin_left = parseInt($element.css('marginLeft'), 10) || 0,
@@ -1008,16 +1076,18 @@
 
                     // if icon is to be placed *inside* the element
                     // position the icon accordingly
-                    if (plugin.settings.inside)
+                    if (plugin.settings.inside) {
 
-                        icon.css({
-                            'top':  element_margin_top + ((element_height - icon_height) / 2),
-                            'left': element_margin_left + (element_width - icon_width - icon_margin_right)
-                        });
+                        // set icon's top
+                        icon.css('top', element_margin_top + ((element_height - icon_height) / 2));
+
+                        // place icon to the right or to the left, according to the settings
+                        if (plugin.settings.icon_position == 'right') icon.css('right', 0);
+                        else icon.css('left', 0);
 
                     // if icon is to be placed to the right of the element
                     // position the icon accordingly
-                    else
+                    } else
 
                         icon.css({
                             'top':  element_margin_top + ((element_height - icon_height) / 2),
@@ -1038,11 +1108,22 @@
             // (the "days" view is available and "today" is not a disabled date)
             show_select_today = (plugin.settings.show_select_today !== false && $.inArray('days', views) > -1 && !is_disabled(current_system_year, current_system_month, current_system_day) ? plugin.settings.show_select_today : false);
 
-            // if we just needed to recompute the things above, return now
-            if (update) return;
+            // if we just needed to recompute the things above
+            if (update) {
 
-            // update icon/date picker position on resize
-            $(window).bind('resize.Zebra_DatePicker_' + uniqueid, function() {
+                // make sure we update these strings, in case they've changed
+                $('.dp_previous', datepicker).html(plugin.settings.header_navigation[0]);
+                $('.dp_next', datepicker).html(plugin.settings.header_navigation[1]);
+                $('.dp_clear', datepicker).html(plugin.settings.lang_clear_date);
+                $('.dp_today', datepicker).html(plugin.settings.show_select_today);
+
+                // don't go further
+                return;
+
+            }
+
+            // update icon/date picker position on resize and/or changing orientation
+            $(window).bind('resize.Zebra_DatePicker_' + uniqueid + ', orientationchange.Zebra_DatePicker_' + uniqueid, function() {
 
                 // hide the date picker
                 plugin.hide();
@@ -1370,6 +1451,17 @@
         };
 
         /**
+         *  Clears the selected date.
+         *
+         *  @return void
+         */
+        plugin.clear_date = function() {
+
+            $(cleardate).trigger('click');
+
+        };
+
+        /**
          *  Destroys the date picker.
          *
          *  @return void
@@ -1382,13 +1474,26 @@
             // ...and the calendar
             plugin.datepicker.remove();
 
+            // if calendar icon was shown and the date picker was not always visible,
+            // also remove the wrapper needed for positioning it
+            if (plugin.settings.show_icon && !plugin.settings.always_visible) $element.unwrap();
+
+            // remove associated event handlers from the element
+            $element.unbind('click.Zebra_DatePicker_' + uniqueid);
+            $element.unbind('blur.Zebra_DatePicker_' + uniqueid);
+
             // remove associated event handlers from the document
             $(document).unbind('keyup.Zebra_DatePicker_' + uniqueid);
             $(document).unbind('mousedown.Zebra_DatePicker_' + uniqueid);
             $(window).unbind('resize.Zebra_DatePicker_' + uniqueid);
+            $(window).unbind('orientationchange.Zebra_DatePicker_' + uniqueid);
 
             // remove association with the element
             $element.removeData('Zebra_DatePicker');
+
+            // restore element's modified attributes
+            $element.attr('readonly', original_attributes['readonly'] ? true : false);
+            $element.attr('style', original_attributes['style'] ? original_attributes['style'] : '');
 
         };
 
@@ -1413,6 +1518,30 @@
 
                     // execute the callback function and pass as argument the element the plugin is attached to
                     plugin.settings.onClose.call($element, $element);
+            }
+
+        };
+
+        /**
+         *  Set the date picker's value
+         *
+         *  Must be in the format set by the "format" property!
+         *
+         *  @return void
+         */
+        plugin.set_date = function(date) {
+
+            var dateObj;
+
+            // if a valid date was entered, and date is not disabled
+            if ((dateObj = check_date(date)) && !is_disabled(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate())) {
+
+                // set the element's value
+                $element.val(date);
+
+                // update the paired date picker (if any)
+                update_dependent(dateObj);
+
             }
 
         };
@@ -2018,7 +2147,10 @@
                         // get the week day (0 to 6, Sunday to Saturday)
                         weekday = (plugin.settings.first_day_of_week + i) % 7,
 
-                        class_name = '';
+                        class_name = '',
+
+                        // custom class, if any
+                        custom_class_name = get_custom_class(selected_year, selected_month, day);
 
                     // if date needs to be disabled
                     if (is_disabled(selected_year, selected_month, day)) {
@@ -2032,6 +2164,9 @@
                         // highlight the current system date
                         if (selected_month == current_system_month && selected_year == current_system_year && current_system_day == day) class_name += ' dp_disabled_current';
 
+                        // apply custom class, with the "_disabled" suffix, if a custom class exists
+                        if (custom_class_name != '') class_name += ' ' + custom_class_name + '_disabled';
+
                     // if there are no restrictions
                     } else {
 
@@ -2044,10 +2179,13 @@
                         // highlight the current system date
                         if (selected_month == current_system_month && selected_year == current_system_year && current_system_day == day) class_name += ' dp_current';
 
+                        // apply custom class, if a custom class exists
+                        if (custom_class_name != '') class_name += ' ' + custom_class_name;
+
                     }
 
                     // print the day of the month (if "day" is NaN, use an empty string instead)
-                    html += '<td' + (class_name !== '' ? ' class="' + $.trim(class_name) + '"' : '') + '>' + ((plugin.settings.zero_pad ? str_pad(day, 2) : day) || '') + '</td>';
+                    html += '<td' + (class_name !== '' ? ' class="' + $.trim(class_name) + '"' : '') + '>' + ((plugin.settings.zero_pad ? str_pad(day, 2) : day) || '&nbsp;') + '</td>';
 
                 }
 
@@ -2182,6 +2320,76 @@
         };
 
         /**
+         *  Return the name of a custom class to be applied to the given date.
+         *
+         *  @return string  The name of a custom class to be applied to the given date, or an empty string if no custom
+         *                  class needs to be applied.
+         *
+         *  @param  integer     year    The year to check
+         *  @param  integer     month   The month to check
+         *  @param  integer     day     The day to check
+         *
+         *  @access private
+         */
+        var get_custom_class = function(year, month, day) {
+
+            var class_name, i, found;
+
+            // if month is given as argument, increment it (as JavaScript uses 0 for January, 1 for February...)
+            if (typeof month != 'undefined') month = month + 1;
+
+            // iterate through the custom classes
+            for (i in custom_class_names) {
+
+                // the class name we're currently checking
+                class_name = custom_class_names[i]; found = false;
+
+                // if there are any custom classes defined
+                if ($.isArray(custom_classes[class_name]))
+
+                    // iterate through the rules for which the custom class to be applied
+                    $.each(custom_classes[class_name], function() {
+    
+                        // if a custom class needs to be applied to the date we're checking, don't look further
+                        if (found) return;
+    
+                        var rule = this;
+    
+                        // if the rules apply for the current year
+                        if ($.inArray(year, rule[2]) > -1 || $.inArray('*', rule[2]) > -1)
+    
+                            // if the rules apply for the current month
+                            if ((typeof month != 'undefined' && $.inArray(month, rule[1]) > -1) || $.inArray('*', rule[1]) > -1)
+    
+                                // if the rules apply for the current day
+                                if ((typeof day != 'undefined' && $.inArray(day, rule[0]) > -1) || $.inArray('*', rule[0]) > -1) {
+    
+                                    // if custom class is to be applied whatever the day
+                                    // don't look any further
+                                    if (rule[3] == '*') return (found = class_name);
+    
+                                    // get the weekday
+                                    var weekday = new Date(year, month - 1, day).getDay();
+    
+                                    // if custom class is to be applied to weekday 
+                                    // don't look any further
+                                    if ($.inArray(weekday, rule[3]) > -1) return (found = class_name);
+    
+                                }
+    
+                    });
+
+                // if a custom class needs to be applied to the date we're checking, don't look further
+                if (found) return found;
+
+            }
+
+            // return what we've found
+            return found || '';
+
+        };
+
+        /**
          *  Generates an iFrame shim in Internet Explorer 6 so that the date picker appears above select boxes.
          *
          *  @return void
@@ -2270,6 +2478,9 @@
             // don't check bogus values
             if ((undefined === year || isNaN(year)) && (undefined === month || isNaN(month)) && (undefined === day || isNaN(day))) return false;
 
+            // this date picker cannot handle years before 1000, so we return false in this case
+            else if (year < 1000) return true;
+
             // if calendar has direction restrictions
             if (!(!$.isArray(plugin.settings.direction) && to_int(plugin.settings.direction) === 0)) {
 
@@ -2325,7 +2536,7 @@
             var disabled = false, enabled = false;
 
             // if there are rules for disabling dates
-            if (disabled_dates)
+            if ($.isArray(disabled_dates) && disabled_dates.length)
 
                 // iterate through the rules for disabling dates
                 $.each(disabled_dates, function() {
@@ -2618,6 +2829,8 @@
                 // so it's easy to identify elements in the list
                 elements.each(function() {
 
+                    var matches;
+
                     // if view is "days"
                     if (view == 'days') {
 
@@ -2625,7 +2838,7 @@
                         if ($(this).hasClass('dp_not_in_month_selectable')) {
 
                             // extract date from the attached class
-                            var matches = $(this).attr('class').match(/date\_([0-9]{4})(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])/);
+                            matches = $(this).attr('class').match(/date\_([0-9]{4})(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])/);
 
                             // attach a "date" data attribute to each element in the form of of YYYY-MM-DD for easily identifying sought elements
                             $(this).data('date', matches[1] + '-' + matches[2] + '-' + matches[3]);
@@ -2640,7 +2853,7 @@
                     } else if (view == 'months') {
 
                         // get the month's number for the element's class
-                        var matches = $(this).attr('class').match(/dp\_month\_([0-9]+)/);
+                        matches = $(this).attr('class').match(/dp\_month\_([0-9]+)/);
 
                         // attach a "date" data attribute to each element in the form of of YYYY-MM for easily identifying sought elements
                         $(this).data('date', selected_year + '-' + str_pad(to_int(matches[1]) + 1, 2));
@@ -2838,7 +3051,7 @@
         var to_int = function(str) {
 
             // return the integer representation of the string given as argument
-            return parseInt(str , 10);
+            return parseInt(str, 10);
 
         };
 
