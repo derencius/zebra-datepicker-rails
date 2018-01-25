@@ -4,7 +4,8 @@ desc "Change css url calls to use sass-rails' asset-url"
 task :change_css_url do
   Dir.chdir('vendor/assets/stylesheets/zebra-datepicker/')
   Dir.glob('*.scss').each do |filename|
-    content = File.read(filename).gsub!(" url('../images/", " asset-url('zebra-datepicker/")
+    template = File.basename(filename, '.scss')
+    content = File.read(filename).gsub!(' url("', ' asset-url("zebra-datepicker/' + template + '/')
     file = File.open(filename, 'w')
     file.write(content)
     file.close
@@ -14,17 +15,17 @@ end
 desc 'Copy Assets from Zebra_Datepicker'
 task :copy do
   {
-    'public/css/bootstrap.css' => 'vendor/assets/stylesheets/zebra-datepicker/bootstrap.scss',
-    'public/css/default.css'   => 'vendor/assets/stylesheets/zebra-datepicker/default.scss',
-    'public/css/metallic.css'  => 'vendor/assets/stylesheets/zebra-datepicker/metallic.scss',
+    'dist/css/bootstrap/zebra_datepicker.css' => 'vendor/assets/stylesheets/zebra-datepicker/bootstrap.scss',
+    'dist/css/default/zebra_datepicker.css'   => 'vendor/assets/stylesheets/zebra-datepicker/default.scss',
+    'dist/css/metallic/zebra_datepicker.css'  => 'vendor/assets/stylesheets/zebra-datepicker/metallic.scss',
 
-    'public/images/metallic/'             => 'vendor/assets/images/zebra-datepicker/',
-    'public/images/calendar-disabled.png' => 'vendor/assets/images/zebra-datepicker/',
-    'public/images/calendar.png'          => 'vendor/assets/images/zebra-datepicker/',
+    'dist/css/bootstrap/icons.png' => 'vendor/assets/images/zebra-datepicker/bootstrap/icons.png',
+    'dist/css/default/icons.png'   => 'vendor/assets/images/zebra-datepicker/default/icons.png',
+    'dist/css/metallic/icons.png'  => 'vendor/assets/images/zebra-datepicker/metallic/icons.png',
 
-    'public/javascript/zebra_datepicker.js' => 'vendor/assets/javascripts/zebra-datepicker/',
-    'public/javascript/zebra_datepicker.src.js' => 'vendor/assets/javascripts/zebra-datepicker/'
+    'dist/zebra_datepicker.src.js' => 'vendor/assets/javascripts/zebra-datepicker/zebra_datepicker.js'
   }.each do |src, dest|
+    FileUtils.mkdir_p File.dirname(dest)
     FileUtils.cp_r("Zebra_Datepicker/#{src}", dest)
   end
 end
